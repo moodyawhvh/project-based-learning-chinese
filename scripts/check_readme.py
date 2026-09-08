@@ -16,6 +16,23 @@ Subcommands:
     check-links   [--all | --urls-from F] [--state F] [--dry-run] [--json]
     report        --results F --state F
 """
+
+# 中文注释(汉化说明):本脚本是仓库的"README 即数据"校验器/链接检查器。
+# 它把 README.md 解析为结构化数据(统一语法,供下方所有子命令共用),
+# 从而保证 lint 检查、PR diff 检查和每周链接失效扫描三者永不互相偏离。
+# 仅依赖 Python 3 标准库,无需审计任何第三方依赖。
+#
+# 安全不变量:README.md 内容和 PR diff 属于不可信输入(本脚本会处理来自
+# fork PR 的数据)。绝不要对其 eval/exec,绝不要传给 shell,绝不要用它
+# 拼接命令行。对这些数据只允许 urllib/http.client 网络调用以及纯字符串/
+# 正则解析。
+#
+# 子命令一览:
+#     lint        --json   校验 README 语法、目录与重复/短链接
+#     check-diff  --json   校验 PR diff(从 stdin 读入 unified diff)
+#     check-links          并发检查链接可达性,维护 link-rot 状态文件
+#     report               基于 check-links 结果生成 Markdown 报告
+
 import argparse
 import json
 import http.client
@@ -229,6 +246,11 @@ def domain_in_policy(hostname, policy):
 
 def parse_readme(text, allow_duplicates=None):
     """Parse README.md text into a Document, recording lint diagnostics."""
+    # 中文注释(汉化说明):核心解析器。
+    # 逐行扫描 README.md:先定位 "## Table of Contents" 标题确定目录块范围,
+    # 再用 ENTRY_RE / SERIES_RE 逐条解析教程条目与多篇幅系列条目,
+    # 将标题、URL、缩进层级写入 Document,同时记录 E 开头的诊断信息
+    # (诊断 = (行号, 代码, 级别, 消息)),供 lint 与 check-diff 子命令共用。
     if allow_duplicates is None:
         allow_duplicates = set()
     doc = Document()
